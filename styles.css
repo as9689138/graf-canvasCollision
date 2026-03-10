@@ -1,0 +1,63 @@
+:root {
+    --bg-main: #f4f7fb;
+    --card-bg: #ffffff;
+    --text-main: #1f2937;
+    --text-soft: #6b7280;
+    --border-soft: #dbe3ee;
+    --canvas-bg: #fff8cc;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: linear-gradient(180deg, #eef4fb 0%, #f8fbff 100%);
+    font-family: Arial, Helvetica, sans-serif;
+    color: var(--text-main);
+}
+
+.app-wrapper {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+}
+
+.collision-card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-soft);
+    border-radius: 20px;
+    overflow: hidden;
+}
+
+.card-header-custom {
+    padding: 1.25rem 1.25rem 0.75rem 1.25rem;
+    border-bottom: 1px solid #edf2f7;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbfd 100%);
+}
+
+.title {
+    font-size: clamp(1.4rem, 2vw, 2rem);
+    font-weight: 700;
+    margin: 0;
+}
+
+.subtitle {
+    font-size: 0.95rem;
+    color: var(--text-soft);
+}
+
+.canvas-wrapper {
+    padding: 1rem;
+}
+
+#canvas {
+    display: block;
+    width: 100%;
+    height: clamp(500px, 80vh, 900px);
+    background: var(--canvas-bg);
+    border: 1px solid #eadf9b;
+    border-radius: 16px;
+}
