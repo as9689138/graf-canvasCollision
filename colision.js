@@ -1,159 +1,244 @@
 const canvas = document.getElementById("canvas");
 let ctx = canvas.getContext("2d");
 
-class Circle {
-    constructor(x, y, radius, color, text, speed) {
+const TOTAL_OBJECTS = 20;
+const TOP_MARGIN = 12;
+
+let objects = [];
+let eliminations = 0;
+
+let mouseX = 0;
+let mouseY = 0;
+let hoveredObjectIndex = -1;
+
+const backgroundImage = new Image();
+backgroundImage.src = "assets/img/fondoEspacio.jpg";
+
+const spriteImage = new Image();
+spriteImage.src = "assets/img/nave.png";
+
+function getSpeedLevel() {
+    if (eliminations > 15) {
+        return {
+            minY: 4.2,
+            maxY: 6.2,
+            label: "Alta",
+            bg: "rgba(239, 68, 68, 0.92)",
+            border: "#b91c1c",
+            text: "#ffffff"
+        };
+    }
+
+    if (eliminations > 10) {
+        return {
+            minY: 2.8,
+            maxY: 4.2,
+            label: "Media",
+            bg: "rgba(245, 158, 11, 0.92)",
+            border: "#b45309",
+            text: "#ffffff"
+        };
+    }
+
+    return {
+        minY: 1.2,
+        maxY: 2.8,
+        label: "Inicial",
+        bg: "rgba(59, 130, 246, 0.92)",
+        border: "#1d4ed8",
+        text: "#ffffff"
+    };
+}
+
+class FallingObject {
+    constructor(x, y, size, sprite, speedY, speedX = 0) {
         this.posX = x;
         this.posY = y;
-        this.radius = radius;
 
-        this.color = color;
-        this.originalColor = color;
+        this.size = size;
 
-        this.text = text;
-        this.speed = speed;
+        this.width = size * 1.35;
+        this.height = size * 1.8;
+        this.hitRadius = size * 0.45;
 
-        this.dx = (Math.random() < 0.5 ? -1 : 1) * this.speed;
-        this.dy = (Math.random() < 0.5 ? -1 : 1) * this.speed;
+        this.sprite = sprite;
+
+        this.dx = speedX;
+        this.dy = speedY;
+        this.gravity = 0.015;
 
         this.flashFrames = 0;
+        this.hitboxPadding = 18;
+        this.isHovered = false;
     }
 
     draw(context) {
-        context.beginPath();
-        context.strokeStyle = this.color;
-        context.lineWidth = 2;
-        context.arc(this.posX, this.posY, this.radius, 0, Math.PI * 2, false);
-        context.stroke();
-        context.closePath();
+        const drawX = this.posX - this.width / 2;
+        const drawY = this.posY - this.height / 2;
 
-        context.beginPath();
-        context.fillStyle = "#000";
-        context.textAlign = "center";
-        context.textBaseline = "middle";
-        context.font = "18px Arial";
-        context.fillText(this.text, this.posX, this.posY);
-        context.closePath();
+        if (this.flashFrames > 0) {
+            context.save();
+            context.shadowColor = "rgba(0, 102, 255, 0.75)";
+            context.shadowBlur = 18;
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+            context.restore();
+        } else if (this.isHovered) {
+            context.save();
+            context.shadowColor = "rgba(255, 255, 255, 0.9)";
+            context.shadowBlur = 14;
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+            context.restore();
+        } else {
+            context.drawImage(this.sprite, drawX, drawY, this.width, this.height);
+        }
     }
 
     move() {
+        this.dy += this.gravity;
         this.posX += this.dx;
         this.posY += this.dy;
     }
 
-    checkBorderCollision(canvasWidth, canvasHeight) {
-        if (this.posX + this.radius >= canvasWidth) {
-            this.posX = canvasWidth - this.radius;
+    checkSideCollision(canvasWidth) {
+        if (this.posX + this.hitRadius >= canvasWidth) {
+            this.posX = canvasWidth - this.hitRadius;
             this.dx = -this.dx;
         }
 
-        if (this.posX - this.radius <= 0) {
-            this.posX = this.radius;
+        if (this.posX - this.hitRadius <= 0) {
+            this.posX = this.hitRadius;
             this.dx = -this.dx;
-        }
-
-        if (this.posY + this.radius >= canvasHeight) {
-            this.posY = canvasHeight - this.radius;
-            this.dy = -this.dy;
-        }
-
-        if (this.posY - this.radius <= 0) {
-            this.posY = this.radius;
-            this.dy = -this.dy;
         }
     }
 
-    getDistance(otherCircle) {
-        const dx = otherCircle.posX - this.posX;
-        const dy = otherCircle.posY - this.posY;
+    checkTopCollision() {
+        if (this.posY - this.hitRadius <= 0) {
+            this.posY = this.hitRadius;
+            this.dy = Math.abs(this.dy);
+        }
+    }
+
+    isOutBottom(canvasHeight) {
+        return this.posY - this.hitRadius > canvasHeight;
+    }
+
+    getDistance(otherObject) {
+        const dx = otherObject.posX - this.posX;
+        const dy = otherObject.posY - this.posY;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    isCollidingWith(otherCircle) {
-        return this.getDistance(otherCircle) <= (this.radius + otherCircle.radius);
+    isCollidingWith(otherObject) {
+        return this.getDistance(otherObject) <= (this.hitRadius + otherObject.hitRadius);
+    }
+
+    containsPoint(x, y) {
+        const dx = x - this.posX;
+        const dy = y - this.posY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        return distance <= (this.hitRadius + this.hitboxPadding);
     }
 
     flashBlue() {
-        this.color = "#0000FF";
         this.flashFrames = 6;
     }
 
-    restoreColor() {
+    restoreFlash() {
         if (this.flashFrames > 0) {
             this.flashFrames--;
-        } else {
-            this.color = this.originalColor;
         }
     }
 
-    bounceWith(otherCircle) {
+    bounceWith(otherObject) {
         const tempDx = this.dx;
         const tempDy = this.dy;
 
-        this.dx = otherCircle.dx;
-        this.dy = otherCircle.dy;
+        this.dx = otherObject.dx;
+        this.dy = otherObject.dy;
 
-        otherCircle.dx = tempDx;
-        otherCircle.dy = tempDy;
+        otherObject.dx = tempDx;
+        otherObject.dy = tempDy;
 
-        const dx = otherCircle.posX - this.posX;
-        const dy = otherCircle.posY - this.posY;
+        const dx = otherObject.posX - this.posX;
+        const dy = otherObject.posY - this.posY;
         const distance = Math.sqrt(dx * dx + dy * dy);
 
         if (distance === 0) {
             return;
         }
 
-        const overlap = (this.radius + otherCircle.radius) - distance;
+        const overlap = (this.hitRadius + otherObject.hitRadius) - distance;
         const unitX = dx / distance;
         const unitY = dy / distance;
 
         this.posX -= unitX * (overlap / 2);
         this.posY -= unitY * (overlap / 2);
 
-        otherCircle.posX += unitX * (overlap / 2);
-        otherCircle.posY += unitY * (overlap / 2);
+        otherObject.posX += unitX * (overlap / 2);
+        otherObject.posY += unitY * (overlap / 2);
     }
 
     keepInside(canvasWidth, canvasHeight) {
-        if (this.posX - this.radius < 0) {
-            this.posX = this.radius;
+        if (this.posX - this.hitRadius < 0) {
+            this.posX = this.hitRadius;
         }
 
-        if (this.posX + this.radius > canvasWidth) {
-            this.posX = canvasWidth - this.radius;
+        if (this.posX + this.hitRadius > canvasWidth) {
+            this.posX = canvasWidth - this.hitRadius;
         }
 
-        if (this.posY - this.radius < 0) {
-            this.posY = this.radius;
+        if (this.posY - this.hitRadius < 0) {
+            this.posY = this.hitRadius;
         }
 
-        if (this.posY + this.radius > canvasHeight) {
-            this.posY = canvasHeight - this.radius;
+        if (this.posY + this.hitRadius > canvasHeight) {
+            this.posY = canvasHeight - this.hitRadius;
         }
     }
 
-    update(context, canvasWidth, canvasHeight) {
+    applySpeedLevel() {
+        const speedLevel = getSpeedLevel();
+
+        if (this.dy > 0) {
+            this.dy = Math.max(this.dy, randomBetween(speedLevel.minY, speedLevel.maxY));
+        }
+    }
+
+    respawnAtTop(existingObjects, canvasWidth) {
+        const newPosition = findSpawnPosition(this.hitRadius, existingObjects, canvasWidth);
+        const speedLevel = getSpeedLevel();
+
+        this.posX = newPosition.x;
+        this.posY = newPosition.y;
+
+        this.dx = randomBetween(-1.2, 1.2);
+        this.dy = randomBetween(speedLevel.minY, speedLevel.maxY);
+        this.flashFrames = 0;
+        this.isHovered = false;
+    }
+
+    update(context, canvasWidth, canvasHeight, allObjects) {
         this.move();
-        this.checkBorderCollision(canvasWidth, canvasHeight);
-        this.restoreColor();
+        this.checkSideCollision(canvasWidth);
+        this.checkTopCollision();
+
+        if (this.isOutBottom(canvasHeight)) {
+            this.respawnAtTop(allObjects, canvasWidth);
+        }
+
+        this.restoreFlash();
         this.draw(context);
     }
 }
-
-let circles = [];
 
 function resizeCanvas() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
 
-    circles.forEach(circle => {
-        circle.keepInside(canvas.width, canvas.height);
+    objects.forEach(object => {
+        object.keepInside(canvas.width, canvas.height);
     });
-}
-
-function randomColor() {
-    return `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0")}`;
 }
 
 function randomBetween(min, max) {
@@ -164,72 +249,295 @@ function randomPosition(radius, max) {
     return Math.random() * (max - radius * 2) + radius;
 }
 
-function generateCircles(n) {
-    circles = [];
+function findSpawnPosition(hitRadius, existingObjects, canvasWidth) {
+    let x;
+    let y;
+    let validPosition = false;
+    let attempts = 0;
+
+    while (!validPosition && attempts < 150) {
+        attempts++;
+
+        x = randomPosition(hitRadius, canvasWidth);
+        y = hitRadius + TOP_MARGIN + randomBetween(0, 80);
+
+        validPosition = true;
+
+        for (let i = 0; i < existingObjects.length; i++) {
+            const other = existingObjects[i];
+
+            const dx = other.posX - x;
+            const dy = other.posY - y;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance < other.hitRadius + hitRadius + 10) {
+                validPosition = false;
+                break;
+            }
+        }
+    }
+
+    if (!validPosition) {
+        x = randomPosition(hitRadius, canvasWidth);
+        y = hitRadius + TOP_MARGIN;
+    }
+
+    return { x, y };
+}
+
+function createObject(existingObjects) {
+    const size = randomBetween(28, 48);
+    const hitRadius = size * 0.45;
+    const position = findSpawnPosition(hitRadius, existingObjects, canvas.width);
+    const speedLevel = getSpeedLevel();
+
+    const speedY = randomBetween(speedLevel.minY, speedLevel.maxY);
+    const speedX = randomBetween(-1.2, 1.2);
+
+    return new FallingObject(
+        position.x,
+        position.y,
+        size,
+        spriteImage,
+        speedY,
+        speedX
+    );
+}
+
+function generateObjects(n) {
+    objects = [];
 
     for (let i = 0; i < n; i++) {
-
-        let radius = randomBetween(20, 45);
-        let x;
-        let y;
-        let validPosition = false;
-
-        while (!validPosition) {
-
-            x = randomPosition(radius, canvas.width);
-            y = randomPosition(radius, canvas.height);
-
-            validPosition = true;
-
-            for (let j = 0; j < circles.length; j++) {
-
-                let dx = circles[j].posX - x;
-                let dy = circles[j].posY - y;
-                let distance = Math.sqrt(dx * dx + dy * dy);
-
-                if (distance < circles[j].radius + radius) {
-                    validPosition = false;
-                    break;
-                }
-
-            }
-
-        }
-
-        const color = randomColor();
-        const speed = randomBetween(1, 5);
-        const text = (i + 1).toString();
-
-        circles.push(new Circle(x, y, radius, color, text, speed));
+        objects.push(createObject(objects));
     }
 }
 
-function handleCircleCollisions() {
-    for (let i = 0; i < circles.length; i++) {
-        for (let j = i + 1; j < circles.length; j++) {
-            if (circles[i].isCollidingWith(circles[j])) {
-                circles[i].flashBlue();
-                circles[j].flashBlue();
-                circles[i].bounceWith(circles[j]);
+function handleObjectCollisions() {
+    for (let i = 0; i < objects.length; i++) {
+        for (let j = i + 1; j < objects.length; j++) {
+            if (objects[i].isCollidingWith(objects[j])) {
+                objects[i].flashBlue();
+                objects[j].flashBlue();
+                objects[i].bounceWith(objects[j]);
             }
         }
     }
+}
+
+function updateAllObjectSpeeds() {
+    objects.forEach(object => {
+        object.applySpeedLevel();
+    });
+}
+
+function maintainObjectCount() {
+    while (objects.length < TOTAL_OBJECTS) {
+        const newObject = createObject(objects);
+        objects.push(newObject);
+    }
+}
+
+function getPointerPosition(event) {
+    const rect = canvas.getBoundingClientRect();
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    return {
+        x: (event.clientX - rect.left) * scaleX,
+        y: (event.clientY - rect.top) * scaleY
+    };
+}
+
+function updateHoveredObject(pointerX, pointerY) {
+    hoveredObjectIndex = -1;
+
+    objects.forEach(object => {
+        object.isHovered = false;
+    });
+
+    for (let i = objects.length - 1; i >= 0; i--) {
+        if (objects[i].containsPoint(pointerX, pointerY)) {
+            hoveredObjectIndex = i;
+            objects[i].isHovered = true;
+            break;
+        }
+    }
+
+    canvas.style.cursor = hoveredObjectIndex !== -1 ? "pointer" : "default";
+}
+
+function removeHoveredObject() {
+    if (hoveredObjectIndex !== -1) {
+        objects.splice(hoveredObjectIndex, 1);
+        eliminations++;
+        hoveredObjectIndex = -1;
+
+        updateAllObjectSpeeds();
+        maintainObjectCount();
+        updateHoveredObject(mouseX, mouseY);
+    }
+}
+
+function drawEliminationCounter(context) {
+    let mode = "Inicial";
+    let bg = "rgba(59,130,246,0.85)";
+    let border = "#2563eb";
+
+    if (eliminations > 15) {
+        mode = "Alta";
+        bg = "rgba(239,68,68,0.9)";
+        border = "#b91c1c";
+    } else if (eliminations > 10) {
+        mode = "Media";
+        bg = "rgba(245,158,11,0.9)";
+        border = "#b45309";
+    }
+
+    const paddingX = 18;
+
+    const text1 = "Eliminaciones: " + eliminations;
+    const text2 = "Modo: " + mode;
+
+    context.save();
+
+    context.font = "bold 18px Arial";
+    const width = Math.max(
+        context.measureText(text1).width,
+        context.measureText(text2).width
+    );
+
+    const boxWidth = width + paddingX * 2;
+    const boxHeight = 64;
+
+    const x = canvas.width - boxWidth - 20;
+    const y = 20;
+
+    context.shadowColor = "rgba(0,0,0,0.25)";
+    context.shadowBlur = 14;
+    context.shadowOffsetY = 6;
+
+    context.fillStyle = bg;
+    context.strokeStyle = border;
+    context.lineWidth = 2;
+
+    if (typeof context.roundRect === "function") {
+        context.beginPath();
+        context.roundRect(x, y, boxWidth, boxHeight, 16);
+        context.fill();
+        context.stroke();
+        context.closePath();
+    } else {
+        context.fillRect(x, y, boxWidth, boxHeight);
+        context.strokeRect(x, y, boxWidth, boxHeight);
+    }
+
+    context.shadowColor = "transparent";
+    context.shadowBlur = 0;
+    context.shadowOffsetY = 0;
+
+    context.fillStyle = "#ffffff";
+    context.textAlign = "left";
+    context.textBaseline = "middle";
+
+    context.fillText(text1, x + paddingX, y + 24);
+    context.fillText(text2, x + paddingX, y + 44);
+
+    context.restore();
+}
+
+function drawBackground() {
+    if (!(backgroundImage.complete && backgroundImage.naturalWidth > 0)) {
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        return;
+    }
+
+    const imgWidth = backgroundImage.naturalWidth;
+    const imgHeight = backgroundImage.naturalHeight;
+
+    const canvasRatio = canvas.width / canvas.height;
+    const imageRatio = imgWidth / imgHeight;
+
+    let drawWidth;
+    let drawHeight;
+    let offsetX;
+    let offsetY;
+
+    if (imageRatio > canvasRatio) {
+        drawHeight = canvas.height;
+        drawWidth = drawHeight * imageRatio;
+        offsetX = (canvas.width - drawWidth) / 2;
+        offsetY = 0;
+    } else {
+        drawWidth = canvas.width;
+        drawHeight = drawWidth / imageRatio;
+        offsetX = 0;
+        offsetY = (canvas.height - drawHeight) / 2;
+    }
+
+    ctx.drawImage(backgroundImage, offsetX, offsetY, drawWidth, drawHeight);
 }
 
 function animate() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    handleObjectCollisions();
 
-    handleCircleCollisions();
-
-    circles.forEach(circle => {
-        circle.update(ctx, canvas.width, canvas.height);
+    objects.forEach(object => {
+        object.update(ctx, canvas.width, canvas.height, objects);
     });
+
+    drawEliminationCounter(ctx, canvas.width);
 
     requestAnimationFrame(animate);
 }
 
-resizeCanvas();
-generateCircles(20);
-animate();
+canvas.addEventListener("pointermove", event => {
+    const pointer = getPointerPosition(event);
+    mouseX = pointer.x;
+    mouseY = pointer.y;
+    updateHoveredObject(mouseX, mouseY);
+});
+
+canvas.addEventListener("pointerdown", event => {
+    const pointer = getPointerPosition(event);
+    mouseX = pointer.x;
+    mouseY = pointer.y;
+    updateHoveredObject(mouseX, mouseY);
+    removeHoveredObject();
+});
+
+canvas.addEventListener("mouseleave", () => {
+    hoveredObjectIndex = -1;
+    objects.forEach(object => {
+        object.isHovered = false;
+    });
+    canvas.style.cursor = "default";
+});
+
+function init() {
+    resizeCanvas();
+    generateObjects(TOTAL_OBJECTS);
+    animate();
+}
+
+let loadedAssets = 0;
+
+function assetReady() {
+    loadedAssets++;
+    if (loadedAssets === 2) {
+        init();
+    }
+}
+
+function assetError(name, path) {
+    console.error(`Error cargando ${name}: ${path}`);
+}
+
+backgroundImage.onload = assetReady;
+spriteImage.onload = assetReady;
+
+backgroundImage.onerror = () => assetError("fondo", backgroundImage.src);
+spriteImage.onerror = () => assetError("sprite", spriteImage.src);
 
 window.addEventListener("resize", resizeCanvas);
